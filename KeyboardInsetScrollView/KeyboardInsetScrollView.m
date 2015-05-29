@@ -11,6 +11,7 @@
 @interface KeyboardInsetScrollView ()
 @property (nonatomic, strong) UIView *activeControl;
 @property (nonatomic, assign) CGRect keyboardRect;
+@property (nonatomic, assign) CGRect contentRect;
 @end
 
 @implementation KeyboardInsetScrollView
@@ -25,8 +26,8 @@
         [KeyboardInsetScrollView addConstraintsForView:self.contentView fitInsideView:self];
         
         //Register keyboard notifications
-        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(keyboardWasShow:) name:UIKeyboardDidShowNotification object:nil];
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(keyboardWillBeHidden:) name:UIKeyboardWillHideNotification object:nil];
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(keyboardWillChangeFrame:) name:UIKeyboardWillChangeFrameNotification object:nil];
     }
     return self;
 }
@@ -202,7 +203,7 @@
         toView = [UIApplication sharedApplication].keyWindow.rootViewController.view;
     }
     CGRect convertedFrame = [self.activeControl convertRect:self.activeControl.bounds toView:toView];
-    if (screen.size.height < convertedFrame.origin.y) {
+    if (screen.size.height < convertedFrame.origin.y + convertedFrame.size.height) {
         CGRect visibleFrame = [self.activeControl convertRect:self.activeControl.bounds toView:self.contentView];
         [self scrollRectToVisible:visibleFrame animated:YES];
         
@@ -240,9 +241,18 @@
     [self scrollToSeeActiveControl];
 }
 
-- (void)keyboardWasShow:(NSNotification *)notification {
+- (void)keyboardWillBeHidden:(NSNotification *)notification {
+    self.keyboardRect = CGRectZero;
+    [UIView animateWithDuration:0.2 animations:^{
+        UIEdgeInsets contentInsets = UIEdgeInsetsZero;
+        self.contentInset = contentInsets;
+        self.scrollIndicatorInsets = contentInsets;
+    }];
+}
+
+- (void)keyboardWillChangeFrame:(NSNotification *)notification {
     NSDictionary* info = [notification userInfo];
-    self.keyboardRect = [[info objectForKey:UIKeyboardFrameBeginUserInfoKey] CGRectValue];
+    self.keyboardRect = [[info objectForKey:UIKeyboardFrameEndUserInfoKey] CGRectValue];
     if ([KeyboardInsetScrollView iOSVersion] < 8.0) {
         UIInterfaceOrientation interfaceOrientation = [UIApplication sharedApplication].statusBarOrientation;
         if (UIInterfaceOrientationIsLandscape(interfaceOrientation)) {
@@ -251,29 +261,23 @@
         }
     }
     
-    CGRect screen = [self currentScreenBounds];
-    
-    UIView *toView = nil;
-    if ([KeyboardInsetScrollView iOSVersion] < 8.0) {
-        toView = [UIApplication sharedApplication].keyWindow.rootViewController.view;
+    if(UIEdgeInsetsEqualToEdgeInsets(UIEdgeInsetsZero, self.contentInset)){
+        UIView *toView = nil;
+        if ([KeyboardInsetScrollView iOSVersion] < 8.0) {
+            toView = [UIApplication sharedApplication].keyWindow.rootViewController.view;
+        }
+        self.contentRect = [self.contentView convertRect:self.contentView.bounds toView:toView];
     }
-    CGRect contentRect = [self.contentView convertRect:self.contentView.bounds toView:toView];
     
-    float space = screen.size.height - (contentRect.origin.y + contentRect.size.height);
+    CGRect screen = [self currentScreenBounds];
+    float space = screen.size.height - (self.contentRect.origin.y + self.contentRect.size.height);
     
     UIEdgeInsets contentInsets = UIEdgeInsetsMake(0.0, 0.0, self.keyboardRect.size.height - space, 0.0);
     self.contentInset = contentInsets;
     self.scrollIndicatorInsets = contentInsets;
+    
     [self scrollToSeeActiveControl];
-}
-
-- (void)keyboardWillBeHidden:(NSNotification *)notification {
-    self.keyboardRect = CGRectZero;
-    [UIView animateWithDuration:0.2 animations:^{
-        UIEdgeInsets contentInsets = UIEdgeInsetsZero;
-        self.contentInset = contentInsets;
-        self.scrollIndicatorInsets = contentInsets;
-    }];
+    
 }
 
 @end
